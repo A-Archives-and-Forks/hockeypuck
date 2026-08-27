@@ -458,7 +458,7 @@ At any time, you can run HKP lookup tests by invoking `make testhkp`.
 This will attempt to fetch Alice's and David's keys from all nodes, via all available HKP endpoints.
 
 The precise output will depend on which scenario is currently active.
-If invoked when scenario 2, 3 or 6 is stable, the lookup should return success for all tests on all nodes, with the exception of "get by-keyid David v2" which is expected to fail:
+If invoked when scenario 2, 3 or 6 is stable, the lookup should return success for all tests on all nodes, with the exception of the "David v1" and "get by-keyid David v2" tests which are expected to fail:
 
 ~~~
 ./tests/hkp
