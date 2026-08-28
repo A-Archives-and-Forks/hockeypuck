@@ -382,13 +382,13 @@ func (st *storage) fetchRecordsByQuery(whereClauses []string, suffixes string, q
 // unlike ValidSelfSigned which does not. This is because preen operates on *records* and the
 // deleted primary key can still be identified from the other record fields.
 func (st *storage) preen(record *hkpstorage.Record) error {
+	if record.PrimaryKey == nil {
+		log.Debugf("unparseable key material in database (fp=%s)", record.Fingerprint)
+		return openpgp.ErrKeyEvaporated
+	}
 	if len(record.PrimaryKey.SubKeys) == 0 && len(record.PrimaryKey.UserIDs) == 0 && len(record.PrimaryKey.Signatures) == 0 {
 		log.Debugf("no self-signatures in database (fp=%s); zeroing", record.Fingerprint)
 		record.PrimaryKey = nil
-		return openpgp.ErrKeyEvaporated
-	}
-	if record.PrimaryKey == nil {
-		log.Debugf("unparseable key material in database (fp=%s)", record.Fingerprint)
 		return openpgp.ErrKeyEvaporated
 	}
 	if record.PrimaryKey.MD5 != record.MD5 {
