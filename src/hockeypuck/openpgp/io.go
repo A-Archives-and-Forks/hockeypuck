@@ -226,14 +226,14 @@ func (ocert *OpaqueCert) Parse() (*PrimaryKey, error) {
 					}
 				}
 			case 12: //packet.PacketTypeTrust:
-				trust, err := ParseTrust(opkt, keyCreationTime, pubkey.UUID, trustablePacket.uuid())
-				if err != nil {
-					log.Warnf("unreadable trust packet in key 0x%s: %v", pubkey.Fingerprint, err)
-					continue
-				}
 				if trustablePacket == nil {
 					// drop trust packets if there's nothing to attach them to
 					log.Warnf("bare trust packets are not currently supported; ignoring")
+					continue
+				}
+				trust, err := ParseTrust(opkt, keyCreationTime, pubkey.UUID, trustablePacket.uuid())
+				if err != nil {
+					log.Warnf("unreadable trust packet in key 0x%s: %v", pubkey.Fingerprint, err)
 					continue
 				} else {
 					trustablePacket.appendTrust(trust)
