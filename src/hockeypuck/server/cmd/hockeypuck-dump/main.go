@@ -145,8 +145,8 @@ func writeKeys(st storage.Queryer, digests []string, num, chunksize int) error {
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		if len(records) < len(chunk) {
-			fmt.Printf("WARNING: fetched fewer records than expected (%d < %d) in file %04d chunk %d\nmissing: ", len(records), len(chunk), num, chunkId)
+		if gotLen, expectedLen := len(records), len(chunk); gotLen < expectedLen {
+			fmt.Printf("WARNING: fetched fewer records than expected (%d < %d) in file %04d chunk %d\nmissing: ", gotLen, expectedLen, num, chunkId)
 			var gotChunk []string
 			for _, record := range records {
 				gotChunk = append(gotChunk, record.MD5)
@@ -155,11 +155,11 @@ func writeKeys(st storage.Queryer, digests []string, num, chunksize int) error {
 			slices.Sort(gotChunk)
 			var i int
 			for _, md5 := range chunk {
-				for gotChunk[i] != md5 {
-					fmt.Printf("%s ", md5)
+				if i < gotLen && gotChunk[i] == md5 {
 					i++
+				} else {
+					fmt.Printf("%s ", md5)
 				}
-				i++
 			}
 			fmt.Printf("\n")
 		}
