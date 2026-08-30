@@ -344,4 +344,12 @@ type Reindexer interface {
 type Reloader interface {
 	// Reload is a function that reloads the keydb in-place, oldest-created items first.
 	Reload() (totalUpdated, totalDeleted int, err error)
+
+	// EnumerateRecords writes a list of records to the channel `ch`.
+	// It does not close `ch` on exit; the caller MUST do so.
+	// Execution can be terminated early by closing the channel `quit`.
+	// The records MUST NOT contain duplicates, but MAY omit records added after it starts executing.
+	// It returns the number of records written to the channel and whether the process was interrupted.
+	// Beware that PrimaryKey fields MAY be nil, and MUST be tested for by the caller.
+	EnumerateRecords(ch chan *Record, quit chan struct{}) (count int, interrupted bool)
 }
