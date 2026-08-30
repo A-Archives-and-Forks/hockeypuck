@@ -169,6 +169,8 @@ func writeKeys(st storage.Queryer, digests []string, num, chunksize int) error {
 				if err != nil {
 					return errors.WithStack(err)
 				}
+			} else {
+				fmt.Printf("INFO: skipping unparseable record fp=%v, md5=%v", record.Fingerprint, record.MD5)
 			}
 		}
 		chunkId++

@@ -79,6 +79,9 @@ func Reverse(s string) string {
 	return string(runes)
 }
 
+// ReadOneKey parses a byte slice into a certificate (as a *PrimaryKey with children).
+// If there is no parseable certificate in the slice, it returns nil.
+// The caller MUST explicitly check for nil, as it is not necessarily an error.
 func ReadOneKey(b []byte, fingerprint string) (*openpgp.PrimaryKey, error) {
 	kr := openpgp.NewKeyReader(bytes.NewBuffer(b))
 	keys, err := kr.Read()
