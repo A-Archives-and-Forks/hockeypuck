@@ -28,6 +28,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	gc "gopkg.in/check.v1"
+	"gopkg.in/tomb.v2"
 
 	hkpstorage "hockeypuck/hkp/storage"
 	"hockeypuck/openpgp"
@@ -203,4 +204,50 @@ func (s *S) TestReloadIncremental(c *gc.C) {
 	c.Assert(finished, gc.Equals, true, comment)
 
 	s.checkReload(c, oldkeydocs)
+}
+
+func (s *S) TestEnumerateRecords(c *gc.C) {
+	log.Infof("starting TestEnumerateRecords")
+	_ = s.setupReload(c)
+	ch := make(chan *hkpstorage.Record)
+	quit := make(chan struct{})
+	var count int
+
+	t := tomb.Tomb{}
+	t.Go(func() error {
+		defer close(ch)
+		n, interrupted := s.storage.EnumerateRecords(ch, quit)
+		c.Check(n, gc.Equals, 3)
+		c.Check(interrupted, gc.Equals, false)
+		return nil
+	})
+	for range ch {
+		count++
+	}
+	err := t.Wait()
+	c.Assert(err, gc.IsNil)
+	c.Assert(count, gc.Equals, 3)
+}
+
+func (s *S) TestEnumerateRecordsInterrupted(c *gc.C) {
+	log.Infof("starting TestEnumerateRecordsInterrupted")
+	_ = s.setupReload(c)
+	ch := make(chan *hkpstorage.Record)
+	quit := make(chan struct{})
+
+	t := tomb.Tomb{}
+	t.Go(func() error {
+		defer close(ch)
+		n, interrupted := s.storage.EnumerateRecords(ch, quit)
+		c.Check(n, gc.Equals, 3)
+		c.Check(interrupted, gc.Equals, true)
+		return nil
+	})
+	for range ch {
+		close(quit)
+		for range ch {
+		}
+	}
+	err := t.Wait()
+	c.Assert(err, gc.IsNil)
 }

@@ -1,19 +1,14 @@
 package main
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
 	"github.com/pkg/errors"
 	"gopkg.in/tomb.v2"
 
-	"hockeypuck/conflux/recon"
-	"hockeypuck/hkp/sks"
 	"hockeypuck/hkp/storage"
 	"hockeypuck/openpgp"
 	"hockeypuck/server"
@@ -45,133 +40,62 @@ func dump(settings *server.Settings) error {
 	}
 	defer st.Close()
 
-	ptree, err := sks.NewPrefixTree(settings.Conflux.Recon.LevelDB.Path, &settings.Conflux.Recon.Settings)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	err = ptree.Create()
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	defer ptree.Close()
-
-	root, err := ptree.Root()
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
 	var t tomb.Tomb
-	ch := make(chan string)
+	ch := make(chan *storage.Record)
+	quit := make(chan struct{})
 
 	t.Go(func() error {
-		var i int
-		var digests []string
 		defer func() {
+			close(quit)
 			for range ch {
 			}
 		}() // drain if early return on error
-		for digest := range ch {
-			digests = append(digests, digest)
-			if len(digests) >= *count {
-				err := writeKeys(st, digests, i, settings.OpenPGP.DB.RequestQueryLimit)
-				if err != nil {
-					return errors.WithStack(err)
-				}
-				i++
-				digests = nil
-			}
-		}
-		if len(digests) > 0 {
-			err := writeKeys(st, digests, i, settings.OpenPGP.DB.RequestQueryLimit)
-			if err != nil {
-				return errors.WithStack(err)
-			}
+		err = writeKeys(ch)
+		if err != nil {
+			return errors.WithStack(err)
 		}
 		return nil
 	})
 	t.Go(func() error {
-		return traverse(root, ch)
+		defer close(ch)
+		_, interrupted := st.EnumerateRecords(ch, quit)
+		if interrupted {
+			return errors.Errorf("enumeration interrupted")
+		}
+		return nil
 	})
 	return t.Wait()
 }
 
-func traverse(root recon.PrefixNode, ch chan string) error {
-	defer close(ch)
-	// Depth-first walk of the prefix tree
-	nodes := []recon.PrefixNode{root}
-	for len(nodes) > 0 {
-		node := nodes[0]
-		nodes = nodes[1:]
-
-		if node.IsLeaf() {
-			elements, err := node.Elements()
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			for _, element := range elements {
-				zb := element.Bytes()
-				ch <- strings.ToLower(hex.EncodeToString(zb))
-			}
-		} else {
-			children, err := node.Children()
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			nodes = append(nodes, children...)
-		}
-	}
-	return nil
-}
-
-func writeKeys(st storage.Queryer, digests []string, num, chunksize int) error {
-	f, err := os.Create(filepath.Join(*outputDir, fmt.Sprintf("hkp-dump-%04d.pgp", num)))
+func writeKeys(ch chan *storage.Record) error {
+	var filenum, recnum int
+	f, err := os.Create(filepath.Join(*outputDir, fmt.Sprintf("hkp-dump-%04d.pgp", filenum)))
 	if err != nil {
 		return errors.WithStack(err)
 	}
 	defer f.Close()
-	var chunkId int
 
-	for len(digests) > 0 {
-		var chunk []string
-		if len(digests) > chunksize {
-			chunk = digests[:chunksize]
-			digests = digests[chunksize:]
+	for record := range ch {
+		if recnum >= *count {
+			// close the current output file and open a new one
+			f.Close()
+			filenum++
+			recnum = 0
+			f, err = os.Create(filepath.Join(*outputDir, fmt.Sprintf("hkp-dump-%04d.pgp", filenum)))
+			if err != nil {
+				return errors.WithStack(err)
+			}
+		}
+
+		if record.PrimaryKey != nil {
+			err := openpgp.WritePackets(f, record.PrimaryKey)
+			if err != nil {
+				return errors.WithStack(err)
+			}
 		} else {
-			chunk = digests
-			digests = nil
+			fmt.Printf("INFO: skipping unparseable record record=%v", record.Fingerprint)
 		}
-
-		records, err := st.FetchRecordsByMD5(chunk)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		if len(records) < len(chunk) {
-			fmt.Printf("WARNING: fetched fewer records than expected (%d < %d) in file %04d chunk %d\nmissing: ", len(records), len(chunk), num, chunkId)
-			var gotChunk []string
-			for _, record := range records {
-				gotChunk = append(gotChunk, record.MD5)
-			}
-			slices.Sort(chunk)
-			slices.Sort(gotChunk)
-			var i int
-			for _, md5 := range chunk {
-				for gotChunk[i] != md5 {
-					fmt.Printf("%s ", md5)
-					i++
-				}
-				i++
-			}
-			fmt.Printf("\n")
-		}
-		for _, record := range records {
-			if record.PrimaryKey != nil {
-				err := openpgp.WritePackets(f, record.PrimaryKey)
-				if err != nil {
-					return errors.WithStack(err)
-				}
-			}
-		}
-		chunkId++
+		recnum++
 	}
 	return nil
 }

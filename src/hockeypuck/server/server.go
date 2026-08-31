@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -457,7 +458,8 @@ func (s *Server) registerWebroot(webroot string) error {
 
 func (s *Server) Start() error {
 	s.openLog()
-	log.Debugf("Starting server with settings: %#v", s.settings.Redact())
+	buf, _ := json.Marshal(s.settings.Redact())
+	log.Debugf("Starting server with settings: %s", buf)
 
 	s.t.Go(s.listenAndServeHKP)
 	if s.settings.HKPS != nil {

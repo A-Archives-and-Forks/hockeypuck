@@ -250,6 +250,10 @@ func (m *Storage) Reload() (int, int, error) {
 	m.record("Reload")
 	return 0, 0, nil
 }
+func (m *Storage) EnumerateRecords(chan *storage.Record, chan struct{}) (int, bool) {
+	m.record("EnumerateRecords")
+	return 0, false
+}
 func (m *Storage) PKSInit(addr string, lastSync time.Time) error {
 	m.record("PKSInit", addr, lastSync)
 	if m.pksInit != nil {

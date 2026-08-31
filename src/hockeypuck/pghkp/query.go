@@ -356,7 +356,7 @@ func (st *storage) fetchRecordsByQuery(whereClauses []string, suffixes string, q
 					log.Errorf("could not delete fp=%s: %v", record.Fingerprint, err)
 				}
 			} else if err != nil {
-				log.Warn(err)
+				log.Warnf("skipping record fp=%s due to unexpected error in preen: %v", record.Fingerprint, err)
 				continue
 			}
 		}

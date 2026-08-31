@@ -54,7 +54,7 @@ func (st *storage) getReloadBunch(bookmark *time.Time, records *[]*hkpstorage.Re
 		return 0, true
 	}
 	count = len(newRecords)
-	log.Debugf("reloading %d records", count)
+	log.Debugf("fetching %d records", count)
 	for _, record := range newRecords {
 		// Can't trust CTime to be monotonically increasing, so compare as we go.
 		if bookmark.Before(record.CTime) {
@@ -136,6 +136,7 @@ func (st *storage) Reload() (totalUpdated, totalDeleted int, _ error) {
 	bookmark := time.Time{}
 	newRecords := make([]*hkpstorage.Record, 0, keysInBunch)
 	result := hkpstorage.InsertError{}
+	t0 := time.Now()
 
 	bs, err := st.bulkCreateTempTables()
 	if err != nil {
@@ -161,12 +162,37 @@ func (st *storage) Reload() (totalUpdated, totalDeleted int, _ error) {
 			}
 			totalUpdated += n
 			totalDeleted += d
-			log.Infof("%d keys reloaded and %d keys deleted in %v (totals %d, %d)", n, d, time.Since(t), totalUpdated, totalDeleted)
+			log.Infof("%d keys reloaded and %d keys deleted in %v (totals %d, %d in %v)", n, d, time.Since(t), totalUpdated, totalDeleted, time.Since(t0))
 			newRecords = make([]*hkpstorage.Record, 0, keysInBunch)
 		}
 		if finished {
 			log.Infof("reload complete")
 			return totalUpdated, totalDeleted, nil
+		}
+	}
+}
+
+// EnumerateRecords writes a list of records to the channel `ch` without reloading them.
+// It does not close `ch` on exit; the caller must do so. Execution can be interrupted by closing the channel `quit`.
+// It returns the number of records written to the channel and whether the process was interrupted.
+func (st *storage) EnumerateRecords(ch chan *hkpstorage.Record, quit chan struct{}) (count int, interrupted bool) {
+	bookmark := time.Time{}
+	result := hkpstorage.InsertError{}
+	for {
+		select {
+		case <-quit:
+			return count, true
+		default:
+			newRecords := make([]*hkpstorage.Record, 0, keysInBunch)
+			_, finished := st.getReloadBunch(&bookmark, &newRecords, &result)
+			for _, record := range newRecords {
+				ch <- record
+				count++
+			}
+			if finished {
+				log.Infof("enumeration complete")
+				return count, false
+			}
 		}
 	}
 }
