@@ -4,14 +4,6 @@ set -eu
 
 PGP_EXPORT=$(awk -F= '/^PGP_EXPORT=/ { print $2 }' .env | tail -1)
 
-# bring deployment back up regardless of failures
-cleanup() {
-    docker-compose up -d
-}
-trap cleanup EXIT
-
-docker-compose stop hockeypuck
-docker-compose rm -f hockeypuck
 docker-compose run --rm \
     --volume "${PGP_EXPORT:-/var/cache/hockeypuck}:/hockeypuck/export" \
     --entrypoint /bin/bash \
