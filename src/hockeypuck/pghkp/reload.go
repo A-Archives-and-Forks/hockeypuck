@@ -136,6 +136,7 @@ func (st *storage) Reload() (totalUpdated, totalDeleted int, _ error) {
 	bookmark := time.Time{}
 	newRecords := make([]*hkpstorage.Record, 0, keysInBunch)
 	result := hkpstorage.InsertError{}
+	t0 := time.Now()
 
 	bs, err := st.bulkCreateTempTables()
 	if err != nil {
@@ -161,7 +162,7 @@ func (st *storage) Reload() (totalUpdated, totalDeleted int, _ error) {
 			}
 			totalUpdated += n
 			totalDeleted += d
-			log.Infof("%d keys reloaded and %d keys deleted in %v (totals %d, %d)", n, d, time.Since(t), totalUpdated, totalDeleted)
+			log.Infof("%d keys reloaded and %d keys deleted in %v (totals %d, %d in %v)", n, d, time.Since(t), totalUpdated, totalDeleted, time.Since(t0))
 			newRecords = make([]*hkpstorage.Record, 0, keysInBunch)
 		}
 		if finished {
